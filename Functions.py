@@ -18,6 +18,7 @@ def hungarian(cost_matrix):
 
     # ✅ 최적 비용 출력
     optimal_cost = cost_matrix[row_ind, col_ind].sum() - (abs(min_value) * len(cost_matrix))
+    #print(type(col_ind))
     #print(f"Total Minimum Cost: {optimal_cost}")  # 원래 비용 계산으로 복원
 
     return row_ind, col_ind
@@ -44,10 +45,12 @@ def fixed_point(CPU_param, Z, gamma_E, h_k, B_U, N0):
     iter_num = 100
     P = 1
     for i in range(iter_num):
-        value = (gamma_E - CPU_param * Z) / Z * np.log2(1+P * abs(h_k)**2 / (B_U * N0))
+        value = (gamma_E - CPU_param * Z) * B_U / Z * np.log2(1+P * abs(h_k)**2 / (B_U * N0))
+        #print(value)
         P_new = value
-        if abs(P_new - P) < 0.01:
+        if abs(P_new - P) < 0.0001:
             P = P_new
             break
         P = P_new
+    #print('fixed point :',P)
     return P

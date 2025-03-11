@@ -8,7 +8,7 @@ import random
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from dataclasses import dataclass, field
 
-def MNIST_dataloader(batch, subset_size, params):
+def MNIST_dataloader(batch, batch_set, subset_size, params):
     transform = transforms.Compose([transforms.ToTensor()])
     full_train_dataset = torchvision.datasets.MNIST(root='./data', train=True, transform=transform, download=True)
     test_dataset = torchvision.datasets.MNIST(root='./data', train=False, transform=transform, download=True)
@@ -23,7 +23,7 @@ def MNIST_dataloader(batch, subset_size, params):
     for i in range(params.K):
         subset_indices = indices[i * subset_size: (i + 1) * subset_size]  # 랜덤 인덱스 분배
         sampler = SubsetRandomSampler(subset_indices)
-        train_loader = DataLoader(full_train_dataset, batch_size=batch, sampler=sampler)
+        train_loader = DataLoader(full_train_dataset, batch_size=batch_set[i], sampler=sampler)
         train_loaders.append(train_loader)
 
     for k in range(params.K):

@@ -2,7 +2,8 @@ import numpy as np
 import Functions
 
 ##### modeling communication envionrment #####
-def model(h_k, params):
+##### outputs are power allocated to optimal, CH and allocated sub-carriers #####
+def model(h_k, batch_set, params):
     K = h_k.shape[0]
     N = h_k.shape[1]
 
@@ -36,13 +37,13 @@ def model(h_k, params):
             l_U[k][n] = params.Z / c_U[k][n]
             l_D[k][n] = params.Z / c_D[k][n]
             e[k][n] = CPU_param * params.Z + P_i_opt[k][n] * l_U[k][n]
-
+    #print(1/c_U[0][0])
     # define Hungarian matrix
     psi = np.zeros((K, N))
     for k in range(K):
         for n in range(N):
             if l_U[k][n] + l_D[k][n] <= params.gamma_T and e[k][n] <= params.gamma_E:
-                psi[k][n] = q_kn[k][n] - 1
+                psi[k][n] = batch_set[k] * (q_kn[k][n] - 1)
             else:
                 psi[k][n] = 0
 

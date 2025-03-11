@@ -27,7 +27,7 @@ import Dataset
 @dataclass
 # ✅ Communication parameters
 class CommunicationParams:
-    K: int = 10  # 사용자 수
+    K: int = 5  # 사용자 수
     N: int = 10  # 서브 채널 수 (K와 동일)
     Nb: int = 1  # 기지국 안테나 수
     Nu: int = 1  # UE 안테나 수
@@ -44,7 +44,7 @@ class CommunicationParams:
     energy_consume: float = field(default=10 ** (-27))  # 에너지 소비율
     CPU_freq: float = field(default=10 ** 9)  # CPU 클럭 속도 (1GHz)
     CPU_cycle: int = 40  # CPU 사이클 수
-    Z: int = 39760  # 데이터 크기 (예제 값)
+    Z: int = 5*10**4  # 데이터 크기 (예제 값)
 
     # m_dB 값을 필드로 선언
     m_dB: np.ndarray = field(default_factory=lambda: np.array([5.782, 7.083, -0.983, 0.023, -4.401, -4.312]))
@@ -60,12 +60,13 @@ class CommunicationParams:
 params = CommunicationParams()
 subset_size = 60000 // params.K  # 각 사용자당 할당할 데이터 개수
 batch = 100
+batch_set = [12, 10, 8, 4, 2]
 num_epochs = 100
 learning_rate = 0.01
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 # ✅ 1. 데이터셋 로딩 (MNIST)
-train_loaders, test_loader = Dataset.MNIST_dataloader(batch, subset_size, params)
+train_loaders, test_loader = Dataset.MNIST_dataloader(batch, batch_set, subset_size, params)
 
 # ✅ K명의 사용자 모델 생성 (각 사용자가 자기 모델 학습)
 models = [FL.FNN().to(device) for _ in range(params.K)]
@@ -86,22 +87,22 @@ for epoch in range(num_epochs):
          + 1j * np.random.normal(0, params.sigma, (params.K))) / np.sqrt(2)
 
     # allocating power and CH through communication model
-    P_i_opt, h_k_allocated, x = Communication.model(h_k, params)
+    P_i_opt, h_k_allocated, x = Communication.model(h_k, batch_set, params)
 
     ##### FL process #####
-    num_joining_users = 0
+    num_joining_data = 0
     total_loss = 0
     total_grad_sum = None
     # local training and communication
     for k in range(params.K):
         # ✅ local_NN 호출 시 total_grad_sum을 인자로 넘김
-        loss, join, total_grad_sum = FL.local_NN(k, h_k_allocated, P_i_opt, x, params, train_loaders, models, optimizers,
+        loss, join, total_grad_sum = FL.local_NN(k, h_k_allocated, P_i_opt, x, batch_set, params, train_loaders, models, optimizers,
                                               criterions, device, total_grad_sum)
         total_loss += loss
-        num_joining_users += join
+        num_joining_data += join * batch_set[k]
 
     # aggregating local models into central model
-    FL.central_NN(num_joining_users, optimizers, central_model, models, learning_rate, total_grad_sum, total_loss, params)
+    FL.central_NN(num_joining_data, optimizers, central_model, models, learning_rate, total_grad_sum, total_loss, params)
 
 
 # ✅ 중앙 모델(BS) 테스트 정확도 측정

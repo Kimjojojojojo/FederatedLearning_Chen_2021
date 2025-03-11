@@ -22,21 +22,28 @@ class FNN(nn.Module):
         x = self.fc2(x)
         return x
 
-def local_NN(k, h_k_allocated, P_i_opt, x, params, train_loaders, models, optimizers, criterions, device, total_grad_sum):
-    #SNR = P_i_opt[k][x[k]] / params.sigma
-    SNR = params.P / params.sigma
-    SINR = abs(h_k_allocated[k]) ** 2 * SNR
-    p_e = 1 - np.exp(-params.m[0] / SINR)
+
+def local_NN(k, h_k, P_allocated, x, batch_set, params, train_loaders, models, optimizers, criterions, device,
+             total_grad_sum):
+    SNR = P_allocated[k][x[k]] / (params.N0 * params.B_U)
+    SINR = abs(h_k[k]) ** 2 * SNR
+    p_e = 1 - np.exp(-params.m[3] / SINR)
 
     models[k].train()
-    batch_iterator = iter(train_loaders[k])  # DataLoader를 iterator로 변환
-    images, labels = next(batch_iterator)  # 랜덤 배치 하나만 샘플링
+    batch_iterator = iter(train_loaders[k])
+
+    # ✅ 예외 처리: 데이터가 부족할 경우 방지
+    try:
+        images, labels = next(batch_iterator)
+    except StopIteration:
+        return 0, 0, total_grad_sum
 
     images, labels = images.to(device), labels.to(device)
     optimizers[k].zero_grad()
     outputs = models[k](images)
     loss = criterions[k](outputs, labels)
     loss.backward()
+    #print(loss.item())
     optimizers[k].step()
 
     # ✅ Gradient 값 저장
@@ -51,17 +58,17 @@ def local_NN(k, h_k_allocated, P_i_opt, x, params, train_loaders, models, optimi
     if random.uniform(0, 1) > p_e:
         join = 1
         for name in total_grad.keys():
-            total_grad_sum[name] += total_grad[name]  # 사용자별 평균 Gradient를 누적
+            total_grad_sum[name] += batch_set[k] * total_grad[name]  # 사용자별 평균 Gradient를 누적, weigthed by batch size
 
-    return loss.item(), join, total_grad_sum
+    return loss.item() , join, total_grad_sum
 
-def central_NN(num_joining_users, optimizers, central_model, models, learning_rate, total_grad_sum, total_loss, params):
-    print(f'joining users {num_joining_users}, average loss: {total_loss / params.K}')
+def central_NN(num_joining_data, optimizers, central_model, models, learning_rate, total_grad_sum, total_loss, params):
+    print(f'joining users {num_joining_data}, average loss: {total_loss / params.K}')
     # ✅ 중앙 모델(Central Model) 업데이트 (FedAvg 방식)
     central_optimizer = optim.Adam(central_model.parameters(), lr=learning_rate)  # 중앙 모델용 Optimizer 추가
     with torch.no_grad():
         for name, param in central_model.named_parameters():
-            param.grad = total_grad_sum[name] / num_joining_users  # 모든 사용자 평균 Gradient 적용
+            param.grad = total_grad_sum[name] / num_joining_data  # 모든 사용자 평균 Gradient 적용
 
     # ✅ Optimizer를 사용하여 중앙 모델 업데이트
     central_optimizer.step()
